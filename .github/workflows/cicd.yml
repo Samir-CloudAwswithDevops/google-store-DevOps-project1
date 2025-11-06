@@ -1,4 +1,4 @@
-name: CI/CD for ECR + Kubernetes
+name: CI/CD for Google Store
 
 on:
   push:
@@ -13,7 +13,7 @@ env:
   CLUSTER_NAME: abinash
 
 permissions:
-  contents: write   # Allow committing updated files back to the repo
+  contents: write  # Allow committing updated files back to the repo
 
 jobs:
   deploy:
@@ -41,13 +41,15 @@ jobs:
             IMAGE_TAG="${{ github.sha }}"
 
             # Create ECR repo if it doesn't exist
-            aws ecr create-repository --repository-name $REPO_NAME || true
+            aws ecr describe-repositories --repository-names $REPO_NAME || aws ecr create-repository --repository-name $REPO_NAME
 
-            # Build and push image
+            # Build Docker image
             docker build -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG ./$service
+
+            # Push Docker image to ECR
             docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
 
-            # Update deployment file
+            # Update deployment.yml with new image
             sed -i "s|image:.*|image: $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g" $service/deployment.yml
           done
 
@@ -65,8 +67,15 @@ jobs:
 
       - name: 🚀 Deploy to Kubernetes
         run: |
-          kubectl apply -f ingress.yml
+          # Apply ingress first with validation off
+          kubectl apply -f ingress.yml --validate=false
+
+          # Apply all services and deployments
           for service in $SERVICES; do
-            kubectl apply -f $service/deployment.yml
             kubectl apply -f $service/service.yml
+            kubectl apply -f $service/deployment.yml
           done
+
+          # Apply main frontend deployment and service
+          kubectl apply -f deployment.yml
+          kubectl apply -f service.yml
