@@ -11,7 +11,7 @@ db_config = {
     "host": "database-1.cjy48iyci4zm.ap-northeast-1.rds.amazonaws.com",
     "user": "admin",
     "password": "Cloud1234",
-    "database": "registrationdb"
+    "database": "cloud"
 }
 
 def get_db_connection():
