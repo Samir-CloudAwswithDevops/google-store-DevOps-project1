@@ -106,4 +106,5 @@ jobs:
       # 10. Verify deployment
       - name: ✅ Verify resources
         run: kubectl get pods,svc,ingress -n $K8S_NAMESPACE
+
         
