@@ -134,3 +134,4 @@ jobs:
             docker compose up -d --build
 
             echo "✅ EC2 deployment complete!"
+
