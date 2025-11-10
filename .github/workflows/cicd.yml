@@ -1,4 +1,4 @@
-name: CI/CD for Google Store (Full Stack - EC2 + ECR)
+name: CI/CD for Google Store (Multi-Service - EC2 + ECR)
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 env:
   AWS_REGION: ap-northeast-1
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
-  SERVICES: "frontend electronics phones computers earphones backend"
+  SERVICES: "electronics phones computers earphones payment backend"
 
 permissions:
   contents: write
@@ -32,24 +32,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 3️⃣ Check AWS Identity
+      # 3️⃣ Verify AWS identity
       - name: 🔍 Verify AWS Identity
         run: aws sts get-caller-identity
 
-      # 4️⃣ Login to Amazon ECR
+      # 4️⃣ Login to ECR
       - name: 📦 Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 5️⃣ Build, Tag & Push Docker Images
+      # 5️⃣ Build & push images for all services
       - name: 🛠 Build & push Docker images
+        id: build_push
         run: |
           set -e
           IMAGE_TAG="${GITHUB_SHA}"
 
+          echo "" > image_map.txt
+
           for service in $SERVICES; do
-            if [ "$service" = "frontend" ]; then
-              FOLDER="."
-            elif [ "$service" = "backend" ]; then
+            if [ "$service" = "backend" ]; then
               FOLDER="Backend"
             else
               FOLDER="$service"
@@ -63,48 +64,47 @@ jobs:
             REPO_NAME="google-store-$service"
             IMAGE_URI="$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG"
 
-            # Create ECR repo if it doesn't exist
+            echo "🚀 Building image for $service..."
             aws ecr describe-repositories --repository-names $REPO_NAME >/dev/null 2>&1 || \
               aws ecr create-repository --repository-name $REPO_NAME
 
-            echo "🚀 Building $service image..."
             docker build -t $IMAGE_URI $FOLDER
             docker push $IMAGE_URI
 
-            # Update image in YAML manifests
-            DEPLOY_YML="$FOLDER/deployment.yml"
-            BACKEND_DEPLOY_YML="$FOLDER/backend-deployment.yml"
-            if [ -f "$DEPLOY_YML" ]; then
-              sed -i "s|image:.*|image: $IMAGE_URI|g" "$DEPLOY_YML"
-            elif [ -f "$BACKEND_DEPLOY_YML" ]; then
-              sed -i "s|image:.*|image: $IMAGE_URI|g" "$BACKEND_DEPLOY_YML"
-            fi
+            echo "$service=$IMAGE_URI" >> image_map.txt
+
+            # Update all YAML files for that service
+            for yaml in deployment.yml service.yml autoscaler.yml; do
+              if [ -f "$FOLDER/$yaml" ]; then
+                sed -i "s|image:.*|image: $IMAGE_URI|g" "$FOLDER/$yaml"
+              fi
+            done
           done
 
-      # 6️⃣ Commit updated image references to repo
-      - name: 🔄 Commit updated deployment manifests
+          echo "✅ All images built and pushed successfully."
+
+      # 6️⃣ Commit updated YAMLs to GitHub
+      - name: 🔄 Commit updated Kubernetes manifests
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add */deployment.yml Backend/backend-deployment.yml deployment.yml || true
-          git commit -m "🔄 Auto-update image tags after build" || echo "No changes to commit"
-          git push origin main || echo "⚠️ Git push skipped (no changes)"
+          git add */*.yml Backend/*.yml || true
+          git commit -m "🔄 Auto-update image URIs for all services" || echo "No changes to commit"
+          git push origin main || echo "⚠️ No changes to push"
 
-      # 7️⃣ SSH into EC2 to pull repo and deploy Docker containers
-      - name: 🔑 Deploy to EC2 via SSH
+      # 7️⃣ SSH into EC2 and deploy
+      - name: 🚀 Deploy to EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "🚀 Deploying Google Store App on EC2..."
-
+            echo "🚀 Starting deployment on EC2..."
             cd /home/ec2-user
 
-            # Clone or update repo
             if [ -d "google-store" ]; then
-              echo "🔄 Pulling latest changes..."
+              echo "🔄 Pulling latest repository changes..."
               cd google-store
               git pull origin main
             else
@@ -113,7 +113,23 @@ jobs:
               cd google-store
             fi
 
-            echo "🐳 Building and starting Docker containers..."
+            echo "📁 Updating image references from image_map.txt..."
+            while IFS="=" read -r service image_uri; do
+              if [ -z "$service" ] || [ -z "$image_uri" ]; then continue; fi
+              if [ "$service" = "backend" ]; then
+                FOLDER="Backend"
+              else
+                FOLDER="$service"
+              fi
+
+              for yaml in deployment.yml service.yml autoscaler.yml; do
+                if [ -f "$FOLDER/$yaml" ]; then
+                  sed -i "s|image:.*|image: $image_uri|g" "$FOLDER/$yaml"
+                fi
+              done
+            done < <(cat image_map.txt || true)
+
+            echo "🐳 Rebuilding and restarting Docker containers..."
             docker compose down || true
             docker compose up -d --build
 
