@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: earphones-frontend-service
+  name: electronics-service
   labels:
-    app: earphones-frontend
+    app: electronics
 spec:
-  type: ClusterIP
   selector:
-    app: earphones-frontend
+    app: electronics
   ports:
     - protocol: TCP
       port: 80
       targetPort: 80
+  type: ClusterIP
