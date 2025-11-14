@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -29,8 +30,11 @@ body {
   position: relative;
 }
 
-.reveal { opacity:0; transform:translateY(55px) scale(0.97); filter: blur(8px); transition:all 1s cubic-bezier(.67,0,.21,1); }
-.reveal.show { opacity:1; transform:none; filter: blur(0);}
+/* Remove blur from reveal class */
+.reveal { opacity:0; transform:translateY(55px) scale(0.97); transition:all 1s cubic-bezier(.67,0,.21,1); }
+.reveal.show { opacity:1; transform:none; }
+/* End blur change */
+
 .preloader { position:fixed; top:0;left:0;width:100vw;height:100vh; display:flex; align-items:center; justify-content:center; background:#111a2566;z-index:200; transition:opacity 1.2s; }
 .preloader .loader { text-align:center; }
 .preloader .spin { width:74px;height:74px;stroke:#56e4ff;stroke-width:8; fill: none; animation:spin 1.3s infinite linear, glowspin 2.5s ease-in-out infinite alternate;}
@@ -121,7 +125,8 @@ body {
 @keyframes modalPopIn { 0% { opacity:0; transform:scale(0.92) translateY(70px);} 100% { opacity:1; transform:none;}}
 .svg-blob {
   position:absolute;
-  filter: blur(24px);
+  /* Remove blur effect from svg-blob */
+  /* filter: blur(24px); */
   z-index:0;
   pointer-events:none;
   user-select:none;
@@ -417,7 +422,6 @@ body {
 
 <script src="script.js" defer></script>
 <script>
-
 // --- Receipt Data Extraction ---
 function extractCartProducts() {
   const cartListElem = document.getElementById('cartList');
@@ -880,4 +884,3 @@ paymentModal.addEventListener('mousedown', function(e) {
 <script src="script.js" defer></script>
 </body>
 </html>
-
