@@ -72,3 +72,11 @@ spec:
                 name: googlepay-service
                 port:
                   number: 80
+
+          - path: /googleclothes
+            pathType: Prefix
+            backend:
+              service:
+                name: googleclothes-service
+                port:
+                  number: 80
